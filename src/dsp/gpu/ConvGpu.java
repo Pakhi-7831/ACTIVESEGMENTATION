@@ -70,31 +70,86 @@ public class ConvGpu implements IConv {
         }
     }
 
+
+
+	private float[] convolve2DGpu(float[] input, int width, int height, float[] kernel2D, int kernelSizeInt) {
+	    float[] output = new float[input.length];
+	
+
+	    long inputSizeBytes = (long) input.length * Sizeof.FLOAT;
+	    long kernelSizeBytes = (long) kernel2D.length * Sizeof.FLOAT;
+	    long outputSizeBytes = (long) output.length * Sizeof.FLOAT;
+	
+	    CUdeviceptr d_input = null;
+	    CUdeviceptr d_kernel = null;
+	    CUdeviceptr d_output = null;
+	
+	    try {
+	        d_input = CudaMemoryManager.allocate(inputSizeBytes);
+	        d_kernel = CudaMemoryManager.allocate(kernelSizeBytes);
+	        d_output = CudaMemoryManager.allocate(outputSizeBytes);
+	
+	        JCudaDriver.cuMemcpyHtoDAsync(d_input, Pointer.to(input), inputSizeBytes, stream);
+	        JCudaDriver.cuMemcpyHtoDAsync(d_kernel, Pointer.to(kernel2D), kernelSizeBytes, stream);
+	
+	        Pointer kernelParameters = Pointer.to(
+	                Pointer.to(d_input),
+	                Pointer.to(d_kernel),
+	                Pointer.to(d_output),
+	                Pointer.to(new int[]{width}),
+	                Pointer.to(new int[]{height}),
+	                Pointer.to(new int[]{kernelSizeInt})
+	        );
+	
+	        int blockSize = 16;
+	        int gridX = (width + blockSize - 1) / blockSize;
+	        int gridY = (height + blockSize - 1) / blockSize;
+	
+	        JCudaDriver.cuLaunchKernel(
+	                function2D,
+	                gridX, gridY, 1,
+	                blockSize, blockSize, 1,
+	                0, stream,
+	                kernelParameters,
+	                null
+	        );
+	
+	        JCudaDriver.cuMemcpyDtoHAsync(Pointer.to(output), d_output, outputSizeBytes, stream);
+	        JCudaDriver.cuStreamSynchronize(stream);
+	
+	        return output;
+	    } finally {
+	        if (d_input != null) CudaMemoryManager.free(d_input, inputSizeBytes);
+	        if (d_kernel != null) CudaMemoryManager.free(d_kernel, kernelSizeBytes);
+	        if (d_output != null) CudaMemoryManager.free(d_output, outputSizeBytes);
+	    }
+	}
+
     @Override
 	public void convolveSemiSep(FloatProcessor ip, float[] kernx, float[] kern_diff) {
-        FloatProcessor ip2 = null;
-        FloatProcessor ipx = null;
-        final Rectangle roi = ip.getRoi();
+	    FloatProcessor ip2 = null;
+	    FloatProcessor ipx = null;
+	    final Rectangle roi = ip.getRoi();
+	
+	    synchronized (this) {
+	        ip2 = (FloatProcessor) ip.duplicate();
+	        ip2.setRoi(roi);
+	        ip2.setSnapshotPixels(ip.getSnapshotPixels());
+	        ipx = (FloatProcessor) ip2.duplicate();
+	        ipx.setRoi(roi);
+	        ipx.setSnapshotPixels(ip.getSnapshotPixels());
+	    }
 
-        synchronized (this) {
-            ip2 = (FloatProcessor) ip.duplicate();
-            ip2.setRoi(roi);
-            ip2.setSnapshotPixels(ip.getSnapshotPixels());
-            ipx = (FloatProcessor) ip2.duplicate();
-            ipx.setRoi(roi);
-            ipx.setSnapshotPixels(ip.getSnapshotPixels());
-        }
-
-        convolveFloat1D(ipx, kern_diff, kern_diff.length, 1); // x direction
-        ipx.setSnapshotPixels(null);
-        convolveFloat1D(ipx, kernx, 1, kernx.length); // y direction
-
-        convolveFloat1D(ip2, kernx, kernx.length, 1); // x direction
-        ip2.setSnapshotPixels(null);
-        convolveFloat1D(ip2, kern_diff, 1, kern_diff.length); // y direction
-        add(ip2, ipx, ip2.getRoi());
-        ip.setPixels(ip2.getPixels());
-    }
+	    convolveFloat1D(ipx, kern_diff, Ox); 
+	    ipx.setSnapshotPixels(null);
+	    convolveFloat1D(ipx, kernx, Oy); 
+	
+	    convolveFloat1D(ip2, kernx, Ox);
+	    ip2.setSnapshotPixels(null);
+	    convolveFloat1D(ip2, kern_diff, Oy); 
+	    add(ip2, ipx, ip2.getRoi());
+	    ip.setPixels(ip2.getPixels());
+	}
 
     @Override
 	public void convolveSemiSepIter(FloatProcessor ip, float[] kernx, float[] kern_diff) {
@@ -318,26 +373,105 @@ public class ConvGpu implements IConv {
         }
     }
 
-    @Override
+	    @Override
 	public void convolveFloat1D(FloatProcessor fp, float[] kernel, int xdir) {
-        IJLineIteratorIP<float[]> iter = new IJLineIteratorIP<float[]>(fp, xdir);
-        final int width = fp.getWidth();
-        final int height = fp.getHeight();
-        FloatProcessor ret = new FloatProcessor(width, height);
+	    final int width = fp.getWidth();
+	    final int height = fp.getHeight();
+	
+	    if (!gpuInitialized || kernel == null || kernel.length == 0 || (xdir != Ox && xdir != Oy)) {
+	        // Fallback: original per-line implementation (still correct).
+	        IJLineIteratorIP<float[]> iter = new IJLineIteratorIP<float[]>(fp, xdir);
+	        FloatProcessor ret = new FloatProcessor(width, height);
+	        int cnt = 0;
+	        while (iter.hasNext()) {
+	            final float[] line = iter.next();
+	            final float[] line2 = lineConvolveGPU(line, kernel, false);
+	            iter.putLineFloat(ret, line2, cnt, xdir);
+	            cnt++;
+	        }
+	        fp.setPixels(ret.getPixels());
+	        return;
+	    }
+	
+	    final int kernelSizeInt = kernel.length;
+	    final int halfKernel = kernelSizeInt / 2;
 
-        int cnt = 0;
-        if (debug) {
-            printvector(kernel);
-            System.out.println();
-        }
-        while (iter.hasNext()) {
-            final float[] line = iter.next();
-            final float[] line2 = lineConvolveGPU(line, kernel, false);
-            iter.putLineFloat(ret, line2, cnt, xdir);
-            cnt++;
-        }
-        fp.setPixels(ret.getPixels());
-    }
+	    float[] kernel2D = new float[kernelSizeInt * kernelSizeInt];
+	    if (xdir == Ox) {
+	        int base = halfKernel * kernelSizeInt;
+	        for (int col = 0; col < kernelSizeInt; col++) {
+	            kernel2D[base + col] = kernel[col];
+	        }
+	    } else { 
+	        int col = halfKernel;
+	        for (int row = 0; row < kernelSizeInt; row++) {
+	            kernel2D[row * kernelSizeInt + col] = kernel[row];
+	        }
+	    }
+	
+	    float[] paddedInput;
+	    int paddedWidth;
+	    int paddedHeight;
+	
+	    if (xdir == Ox) {
+	        paddedWidth = width + 2 * halfKernel;
+	        paddedHeight = height;
+	        paddedInput = new float[paddedWidth * paddedHeight];
+	
+	        float[] input = (float[]) fp.getPixels();
+	        for (int y = 0; y < height; y++) {
+	            int srcRowOff = y * width;
+	            int dstRowOff = y * paddedWidth;
+	
+	            float leftVal = input[srcRowOff];
+	            for (int x = 0; x < halfKernel; x++) {
+	                paddedInput[dstRowOff + x] = leftVal;
+	            }
+	
+	            System.arraycopy(input, srcRowOff, paddedInput, dstRowOff + halfKernel, width);
+	
+	            float rightVal = input[srcRowOff + width - 1];
+	            for (int x = 0; x < halfKernel; x++) {
+	                paddedInput[dstRowOff + halfKernel + width + x] = rightVal;
+	            }
+	        }
+	
+	        float[] paddedOut = convolve2DGpu(paddedInput, paddedWidth, paddedHeight, kernel2D, kernelSizeInt);
+	
+	        float[] out = new float[width * height];
+	        for (int y = 0; y < height; y++) {
+	            int srcOff = y * paddedWidth + halfKernel;
+	            int dstOff = y * width;
+	            System.arraycopy(paddedOut, srcOff, out, dstOff, width);
+	        }
+	        fp.setPixels(out);
+	    } else { 
+	        paddedWidth = width;
+	        paddedHeight = height + 2 * halfKernel;
+	        paddedInput = new float[paddedWidth * paddedHeight];
+	
+	        float[] input = (float[]) fp.getPixels();
+	        for (int py = 0; py < paddedHeight; py++) {
+	            int sy = py - halfKernel;
+	            if (sy < 0) sy = 0;
+	            if (sy >= height) sy = height - 1;
+	
+	            int srcRowOff = sy * width;
+	            int dstRowOff = py * paddedWidth;
+	            System.arraycopy(input, srcRowOff, paddedInput, dstRowOff, width);
+	        }
+	
+	        float[] paddedOut = convolve2DGpu(paddedInput, paddedWidth, paddedHeight, kernel2D, kernelSizeInt);
+	
+	        float[] out = new float[width * height];
+	        for (int y = 0; y < height; y++) {
+	            int srcOff = (y + halfKernel) * paddedWidth;
+	            int dstOff = y * width;
+	            System.arraycopy(paddedOut, srcOff, out, dstOff, width);
+	        }
+	        fp.setPixels(out);
+	    }
+	}
 
     @Override
 	public void convolveFloat1D(ImageStack is, float[] kernel, int xdir) {
