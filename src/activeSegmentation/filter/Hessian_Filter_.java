@@ -1,6 +1,7 @@
 package activeSegmentation.filter;
 import dsp.ConvFactory;
 import dsp.IConv;
+import dsp.IConv2;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
@@ -146,9 +147,6 @@ public class Hessian_Filter_ implements ExtendedPlugInFilter, DialogListener, IF
 		image=new ImagePlus("Hessian result hw="+(r),imageStack);
 		image.show();
 	}
-
-	
-	
 	@Override
 	public void applyFilter(ImageProcessor image, String filterPath,List<Roi> roiList) {
 
@@ -224,27 +222,16 @@ public class Hessian_Filter_ implements ExtendedPlugInFilter, DialogListener, IF
 		FloatProcessor fpaux= (FloatProcessor) ip;
 
 		IConv cnv = ConvFactory.createConv();
+		IConv2 acnv = ConvFactory.createConvApplication();
 
 		FloatProcessor gradx=(FloatProcessor) fpaux.duplicate();
 		FloatProcessor grady=(FloatProcessor) fpaux.duplicate();
 		FloatProcessor lap_xx=(FloatProcessor) fpaux.duplicate();
 		FloatProcessor lap_yy=(FloatProcessor) fpaux.duplicate();
 		FloatProcessor lap_xy=(FloatProcessor) fpaux.duplicate();
-
-		cnv.convolveFloat1D(gradx, kern_diff1, Ox);
-		cnv.convolveFloat1D(gradx, kernx, Oy);
-
-		cnv.convolveFloat1D(grady, kern_diff1, Oy);
-		cnv.convolveFloat1D(grady, kernx, Ox);
-
-		cnv.convolveFloat1D(lap_xx, kern_diff2, Ox);
-		cnv.convolveFloat1D(lap_xx, kernx, Oy);
-
-		cnv.convolveFloat1D(lap_yy, kern_diff2, Oy);
-		cnv.convolveFloat1D(lap_yy, kernx, Ox);
-
-		cnv.convolveFloat1D(lap_xy, kern_diff1, Oy);
-		cnv.convolveFloat1D(lap_xy, kern_diff1, Ox);
+		
+		// replaced the 10 convolveFloat1D calls with a single function implementing taskgraph
+		acnv.convolveSep3(fpaux, kernx, kern_diff1, kern_diff2, gradx, grady, lap_xx, lap_yy, lap_xy);
 		int width=ip.getWidth();
 		int height=ip.getHeight();
 

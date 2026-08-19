@@ -1,6 +1,7 @@
 package activeSegmentation.filter;
 import dsp.ConvFactory;
 import dsp.IConv;
+import dsp.IConv2;
 import ij.IJ;
 import ij.ImageJ;
 import ij.ImagePlus;
@@ -147,21 +148,22 @@ public class Gradient_Filter_ implements ExtendedPlugInFilter, DialogListener, I
 
 	
 	
+	// modified to cater benchmarking requests for filter application without multiple image generation 
 	@Override
 	public void applyFilter(ImageProcessor image, String filterPath,List<Roi> roiList) {
-	 
-			for (int sigma=sz; sigma<= max_sz; sigma *=2){		
-				ImageStack imageStack=new ImageStack(image.getWidth(),image.getHeight());
-				GScaleSpace sp2=new GScaleSpace(sigma);
-				imageStack=filter(image, sp2,  imageStack);
-				for(int j=1;j<=imageStack.getSize();j++){
-					String imageName=filterPath+fs+imageStack.getSliceLabel(j)+".tif" ;
-					IJ.save(new ImagePlus(imageStack.getSliceLabel(j), imageStack.getProcessor(j)),imageName );
-				}
-
+		 
+		for (int sigma=sz; sigma<= max_sz; sigma *=2){		
+			ImageStack imageStack=new ImageStack(image.getWidth(),image.getHeight());
+			GScaleSpace sp2=new GScaleSpace(sigma);
+			imageStack=filter(image, sp2,  imageStack);
+			for(int j=1;j<=imageStack.getSize();j++){
+				String imageName=filterPath+fs+imageStack.getSliceLabel(j)+".tif" ;
+				IJ.save(new ImagePlus(imageStack.getSliceLabel(j), imageStack.getProcessor(j)),imageName );
 			}
 
-	}
+		}
+
+}
 
 
 	
@@ -220,17 +222,17 @@ public class Gradient_Filter_ implements ExtendedPlugInFilter, DialogListener, I
 		FloatProcessor fpaux= (FloatProcessor) ip;
 
 		IConv cnv = ConvFactory.createConv();
+		IConv2 acnv = ConvFactory.createConvApplication();
 
 		FloatProcessor gradx=(FloatProcessor) fpaux.duplicate();
 		FloatProcessor grady=(FloatProcessor) fpaux.duplicate();
 		
  
-		cnv.convolveFloat1D(gradx, kern_diff1, Ox);
-		cnv.convolveFloat1D(gradx, kernx, Oy);
 
-		cnv.convolveFloat1D(grady, kern_diff1, Oy);
-		cnv.convolveFloat1D(grady, kernx, Ox);
- 
+
+		// replaced the 4 convolveFloat1D calls with a single function implementing a taskgraph
+		acnv.convolveStructGrad(fpaux, kernx, kern_diff1, gradx, grady);
+		
 		int width=ip.getWidth();
 		int height=ip.getHeight();
 

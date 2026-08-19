@@ -140,8 +140,9 @@ public class Gauss2D_Filter_ implements ExtendedPlugInFilter, DialogListener, IF
 		image.show();
 	}
 	
-	@Override
-	public void applyFilter(ImageProcessor image, String filterPath,List<Roi> roiList) {
+	@Override 
+	public void applyFilter(ImageProcessor image, String filterPath, List<Roi> roiList) {
+ 
 		String key=getKey();	
 		for (int sigma=sz; sigma<= max_sz; sigma *=2){		
 				GScaleSpace sp=new GScaleSpace(sigma);

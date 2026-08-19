@@ -206,15 +206,15 @@ public class Gaussian_Derivative_Filter_ implements ExtendedPlugInFilter, Dialog
 		return new Pair<>(index, imageStack);
 	}
 
+  
 	@Override
-	public void applyFilter(ImageProcessor image, String filterPath,List<Roi> roiList) {
-
-			for (int sigma=sz; sigma<= max_sz; sigma *=2){		
-				GScaleSpace sp=new GScaleSpace(sigma);
-				ImageProcessor ip=filter(image,  sp,sep, scnorm,nn,mm);			
-				String imageName=filterPath+fs+FILTER_KEY+"_"+sigma+".tif" ;
-				IJ.save(new ImagePlus(FILTER_KEY+"_" + sigma, ip),imageName );
-			}
+	public void applyFilter(ImageProcessor image, String filterPath, List<Roi> roiList) {
+		for (int sigma=sz; sigma<= max_sz; sigma *=2){		
+			GScaleSpace sp=new GScaleSpace(sigma);
+			ImageProcessor ip=filter(image,  sp,sep, scnorm,nn,mm);			
+			String imageName=filterPath+fs+FILTER_KEY+"_"+sigma+".tif" ;
+			IJ.save(new ImagePlus(FILTER_KEY+"_" + sigma, ip),imageName );
+		}
 
 	}
 	

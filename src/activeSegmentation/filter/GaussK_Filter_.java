@@ -2,6 +2,7 @@ package activeSegmentation.filter;
 
 import dsp.ConvFactory;
 import dsp.IConv;
+import dsp.IConv2;
 import ij.IJ;
 import ij.ImageJ;
 import ij.ImagePlus;
@@ -301,23 +302,24 @@ public class GaussK_Filter_ implements ExtendedPlugInFilter, DialogListener, IFi
 	}
 
  
+  
 
 
+ 
 	@Override
 	public void applyFilter(ImageProcessor processor, String filterPath,List<Roi> roiList) {
-			for (int sigma=sz; sigma<= max_sz; sigma *=2){		
-				ImageStack imageStack=new ImageStack(processor.getWidth(),processor.getHeight());
-				GScaleSpace sp=new GScaleSpace(sigma);
-				imageStack=filter(processor, sp,  imageStack);
-				for(int j=1;j<=imageStack.getSize();j++){
-					String imageName=filterPath+"/"+imageStack.getSliceLabel(j)+".tif" ;
-					IJ.save(new ImagePlus(imageStack.getSliceLabel(j), imageStack.getProcessor(j)),imageName );
-				}
-
+		for (int sigma=sz; sigma<= max_sz; sigma *=2){		
+			ImageStack imageStack=new ImageStack(processor.getWidth(),processor.getHeight());
+			GScaleSpace sp=new GScaleSpace(sigma);
+			imageStack=filter(processor, sp,  imageStack);
+			for(int j=1;j<=imageStack.getSize();j++){
+				String imageName=filterPath+"/"+imageStack.getSliceLabel(j)+".tif" ;
+				IJ.save(new ImagePlus(imageStack.getSliceLabel(j), imageStack.getProcessor(j)),imageName );
 			}
 
+		}
+
 	}
-	
 	
 	private ImageStack filter(ImageProcessor ip, GScaleSpace sp,  ImageStack imageStack) {
 		if (!isFloat) 
@@ -363,7 +365,8 @@ public class GaussK_Filter_ implements ExtendedPlugInFilter, DialogListener, IFi
 		long time=-System.nanoTime();	
 		FloatProcessor fpaux= (FloatProcessor) ip;
 
-		IConv cnv = ConvFactory.createConv();
+ 
+		IConv2 acnv = ConvFactory.createConvApplication();
 
 		FloatProcessor gradx=(FloatProcessor) fpaux.duplicate();
 		FloatProcessor grady=(FloatProcessor) fpaux.duplicate();
@@ -371,20 +374,7 @@ public class GaussK_Filter_ implements ExtendedPlugInFilter, DialogListener, IFi
 		FloatProcessor lap_yy=(FloatProcessor) fpaux.duplicate();
 		FloatProcessor lap_xy=(FloatProcessor) fpaux.duplicate();
 
-		cnv.convolveFloat1D(gradx, kern_diff1, Ox);
-		cnv.convolveFloat1D(gradx, kernx, Oy);
-
-		cnv.convolveFloat1D(grady, kern_diff1, Oy);
-		cnv.convolveFloat1D(grady, kernx, Ox);
-
-		cnv.convolveFloat1D(lap_xx, kern_diff2, Ox);
-		cnv.convolveFloat1D(lap_xx, kernx, Oy);
-
-		cnv.convolveFloat1D(lap_yy, kern_diff2, Oy);
-		cnv.convolveFloat1D(lap_yy, kernx, Ox);
-
-		cnv.convolveFloat1D(lap_xy, kern_diff1, Oy);
-		cnv.convolveFloat1D(lap_xy, kern_diff1, Ox);
+		acnv.convolveSep3(fpaux, kernx, kern_diff1, kern_diff2, gradx, grady, lap_xx, lap_yy, lap_xy);
 		int width=ip.getWidth();
 		int height=ip.getHeight();
 

@@ -151,6 +151,7 @@ public class LoG_Filter_ implements ExtendedPlugInFilter, DialogListener, IFilte
 	}
 
 	
+	// modified to cater benchmarking requests for filter application without multiple image generation 
 	@Override
 	public void applyFilter(ImageProcessor image, String filterPath,List<Roi> roiList) {
 		final String key=getKey();	

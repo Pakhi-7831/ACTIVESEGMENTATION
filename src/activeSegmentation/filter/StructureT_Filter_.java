@@ -1,6 +1,7 @@
 package activeSegmentation.filter;
 import dsp.ConvFactory;
 import dsp.IConv;
+import dsp.IConv2;
 import ij.IJ;
 import ij.ImageJ;
 import ij.ImagePlus;
@@ -151,8 +152,7 @@ public class StructureT_Filter_ implements ExtendedPlugInFilter, DialogListener,
 		image.show();
 	}
 
-	
-	
+	// modified to cater benchmarking requests for filter application without multiple image generation 
 	@Override
 	public void applyFilter(ImageProcessor image, String filterPath,List<Roi> roiList) {
 		GScaleSpace sp=new GScaleSpace(sz);
@@ -235,17 +235,14 @@ public class StructureT_Filter_ implements ExtendedPlugInFilter, DialogListener,
 		FloatProcessor fpaux= (FloatProcessor) ip;
 
 		IConv cnv = ConvFactory.createConv();
+		IConv2 acnv = ConvFactory.createConvApplication();
 
 		FloatProcessor gradx=(FloatProcessor) fpaux.duplicate();
 		FloatProcessor grady=(FloatProcessor) fpaux.duplicate();
 		
- 
-		cnv.convolveFloat1D(gradx, kern_diff1, Ox);
-		cnv.convolveFloat1D(gradx, kernx, Oy);
-
-		cnv.convolveFloat1D(grady, kern_diff1, Oy);
-		cnv.convolveFloat1D(grady, kernx, Ox);
- 
+		
+		acnv.convolveStructGrad(fpaux, kernx, kern_diff1, gradx, grady);
+		
 		int width=ip.getWidth();
 		int height=ip.getHeight();
 
@@ -308,16 +305,8 @@ public class StructureT_Filter_ implements ExtendedPlugInFilter, DialogListener,
 		//System.out.println("kernx1:"+kern_diff1.length);
 		GScaleSpace.flip(kern_diff1);
 		
-		//double sigma=sp.getSigma();
-		
-		cnv.convolveFloat1D(gx2, kern_diff1, Ox);
-		cnv.convolveFloat1D(gx2, kernx, Oy);
 
-		cnv.convolveFloat1D(gy2, kern_diff1, Oy);
-		cnv.convolveFloat1D(gy2, kernx, Ox);
-		
-		cnv.convolveFloat1D(gxy, kern_diff1, Oy);
-		cnv.convolveFloat1D(gxy, kernx, Ox);
+		acnv.convolveStructSmooth(kernx, kern_diff1, gx2, gy2, gxy);
 		
 		for (int i=0; i<width*height; i++) {
 			double xx=gx2.getf(i);

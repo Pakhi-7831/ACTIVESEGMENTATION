@@ -200,7 +200,10 @@ public class Gaussian_Jet_Filter_ implements ExtendedPlugInFilter, DialogListene
 		//initialseimageStack(imageStack);
 		return new Pair<Integer,ImageStack>(index, imageStack);
 	}
+  
 
+ 
+	
 	@Override
 	public void applyFilter(ImageProcessor image, String filterPath,List<Roi> roiList) {
 		String key=getKey();	
@@ -254,6 +257,10 @@ public class Gaussian_Jet_Filter_ implements ExtendedPlugInFilter, DialogListene
 		
 		ImageStack is=new ImageStack(ip.getWidth(), ip.getHeight());
 		
+  
+ 
+		
+ 
 		long time=-System.nanoTime();
 		IConv cnv = ConvFactory.createConv();
 		

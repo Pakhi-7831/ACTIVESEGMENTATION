@@ -2,6 +2,7 @@ package activeSegmentation.filter;
 
 import dsp.ConvFactory;
 import dsp.IConv;
+import dsp.IConv2;
 import ij.*;
 import ij.gui.*;
 import ij.measure.*;
@@ -221,6 +222,15 @@ public class ALoG_Filter_ implements ExtendedPlugInFilter, DialogListener, IFilt
 		FloatProcessor fpaux= (FloatProcessor) ip;
 
 		IConv cnv = ConvFactory.createConv();
+  
+ 
+		// creation of interface object for the call fo convolveSep3
+		IConv2 acnv = ConvFactory.createConvApplication();
+		
+//      parity check
+//		dsp.tornado.ConvTornado.parityCheck(fpaux, kernx, kern_diff1, kern_diff2);
+
+ 
 
 		FloatProcessor gradx=(FloatProcessor) fpaux.duplicate();
 		FloatProcessor grady=(FloatProcessor) fpaux.duplicate();
@@ -228,6 +238,7 @@ public class ALoG_Filter_ implements ExtendedPlugInFilter, DialogListener, IFilt
 		FloatProcessor lap_yy=(FloatProcessor) fpaux.duplicate();
 		FloatProcessor lap_xy=(FloatProcessor) fpaux.duplicate();
 
+  
 		cnv.convolveFloat1D(gradx, kern_diff1, Ox);
 		cnv.convolveFloat1D(gradx, kernx, Oy);
 
@@ -242,6 +253,26 @@ public class ALoG_Filter_ implements ExtendedPlugInFilter, DialogListener, IFilt
 
 		cnv.convolveFloat1D(lap_xy, kern_diff1, Oy);
 		cnv.convolveFloat1D(lap_xy, kern_diff1, Ox);
+ 
+//		cnv.convolveFloat1D(gradx, kern_diff1, Ox);
+//		cnv.convolveFloat1D(gradx, kernx, Oy);
+//
+//		cnv.convolveFloat1D(grady, kern_diff1, Oy);
+//		cnv.convolveFloat1D(grady, kernx, Ox);
+//
+//		cnv.convolveFloat1D(lap_xx, kern_diff2, Ox);
+//		cnv.convolveFloat1D(lap_xx, kernx, Oy);
+//
+//		cnv.convolveFloat1D(lap_yy, kern_diff2, Oy);
+//		cnv.convolveFloat1D(lap_yy, kernx, Ox);
+//
+//		cnv.convolveFloat1D(lap_xy, kern_diff1, Oy);
+//		cnv.convolveFloat1D(lap_xy, kern_diff1, Ox);
+		
+		// function added as a replacement to the existing convolveFloat1D calls, so that TornadoVM's TaskGrapg implementation may be used to cancel off the time used in transferring data again and again, and keeping the data transfer limited to just one call, simple and direct
+		acnv.convolveSep3(fpaux, kernx, kern_diff1, kern_diff2, gradx, grady, lap_xx, lap_yy, lap_xy);
+		
+ 
 		int width=ip.getWidth();
 		int height=ip.getHeight();
 

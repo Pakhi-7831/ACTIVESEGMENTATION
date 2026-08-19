@@ -91,6 +91,22 @@ public interface IFilter extends IAnnotated {
          */
         public void applyFilter(ImageProcessor image, String path, List<Roi> roiList);
         
+        /**
+         * Applies this filter with an optional save toggle.
+         * When save is false, the filter computes but skips disk output,
+         * enabling clean benchmark timing without I/O overhead.
+         * Default implementation ignores the save flag and delegates
+         * to the 3-arg version, so existing filters compile unchanged.
+         *
+         * @param image     the image to process
+         * @param path      the output folder path
+         * @param roiList   regions of interest (empty list for full image)
+         * @param save      if true, save output to disk; if false, compute only
+         */
+        default void applyFilter(ImageProcessor image, String path, List<Roi> roiList, boolean save) {
+            applyFilter(image, path, roiList);
+        }
+        
 
         /**
          * Applies this filter to the given image and writes the output to the specified path.
