@@ -53,6 +53,9 @@ public class FilterPanel extends JFrame implements Runnable, ASCommon {
 	/** This {@link ActionEvent} is fired when the 'help' button is pressed. */
 	final ActionEvent HELP_BUTTON_PRESSED = new ActionEvent( this, 6, "Help" );
 
+	/** This {@link ActionEvent} is fired when the 'benchmark' button is pressed. */
+	final ActionEvent BENCHMARK_BUTTON_PRESSED = new ActionEvent( this, 3, "Benchmark" );
+	
 	final ActionEvent CANCEL_BUTTON_PRESSED = new ActionEvent( this, 7, "Cancel" );
 	
 	//final JFrame frame = new JFrame("Filters");
@@ -116,42 +119,43 @@ public class FilterPanel extends JFrame implements Runnable, ASCommon {
 		panel.add(scrollPane);
 		updateFilterList();
 
-		gpuToggle = new JCheckBox("Use GPU");
-		gpuToggle.setFont(ASCommon.FONT.deriveFont(Font.BOLD, 11.5f));
-		gpuToggle.setForeground(Color.WHITE); // set text color
-		gpuToggle.setSelected(false); // Default to CPU
-		gpuToggle.setBounds(158, 420, 100, 35);
-		gpuToggle.setBackground(new Color(200, 200, 200)); // Light grey
-		gpuToggle.setOpaque(true);
-		gpuToggle.addActionListener(e -> toggleGPU());
-		panel.add(gpuToggle);
+//		gpuToggle = new JCheckBox("Force GPU");
+//		gpuToggle.setFont(ASCommon.FONT.deriveFont(Font.BOLD, 11.5f));
+//		gpuToggle.setForeground(Color.WHITE); // set text color
+//		gpuToggle.setSelected(false); // Default to CPU
+//		gpuToggle.setBounds(158, 420, 100, 35);
+//		gpuToggle.setBackground(new Color(200, 200, 200)); // Light grey
+//		gpuToggle.setOpaque(true);
+//		gpuToggle.addActionListener(e -> toggleGPU());
+//		panel.add(gpuToggle);
 
-		addButton(new JButton(), "Compute",null , 40,  420, 110, 35, panel, COMPUTE_BUTTON_PRESSED, null );
-		addButton(new JButton(), "Default",null , 266, 420, 100, 35, panel, DEFAULT_BUTTON_PRESSED, null );
-		addButton(new JButton(), "Save"   ,null , 376, 420, 100, 35, panel, SAVE_BUTTON_PRESSED,    null );
-		addButton(new JButton(), "Cancel" ,null , 486, 420, 100, 35, panel, CANCEL_BUTTON_PRESSED,  null );
+		addButton(new JButton(), "Compute",null , 20,  420, 110, 35, panel, COMPUTE_BUTTON_PRESSED, null );
+		addButton(new JButton(), "Benchmark",null, 136, 420, 130, 35, panel, BENCHMARK_BUTTON_PRESSED, null );  // NEW - second row
+		addButton(new JButton(), "Default",null , 276, 420, 100, 35, panel, DEFAULT_BUTTON_PRESSED, null );
+		addButton(new JButton(), "Save"   ,null , 386, 420, 100, 35, panel, SAVE_BUTTON_PRESSED,    null );
+		addButton(new JButton(), "Cancel" ,null , 496, 420, 100, 35, panel, CANCEL_BUTTON_PRESSED,  null );
 		addButton(new JButton(), "Help"   ,null , 605, 420, 100, 35, panel, HELP_BUTTON_PRESSED,    null );
 
 		getContentPane().add(pane);
 		getContentPane().add(panel);
-		setSize(730, 520);
+		setSize(730, 560);
 		setLocationRelativeTo(null);
 		setVisible(true);
 		isRunning=true;
 	}
 
-	// toggleGPU method
-	private void toggleGPU() {
-		boolean useGPU = gpuToggle.isSelected();
-		FilterManager fm = (FilterManager) filterManager;
-		fm.setUseGPU(useGPU);
-
-		if (useGPU) {
-			IJ.log("GPU acceleration enabled");
-		} else {
-			IJ.log("GPU acceleration disabled");
-		}
-	}
+//	// toggleGPU method
+//	private void toggleGPU() {
+//		boolean useGPU = gpuToggle.isSelected();
+//		FilterManager fm = (FilterManager) filterManager;
+//		fm.setUseGPU(useGPU);
+//
+//		if (useGPU) {
+//			IJ.log("GPU acceleration enabled");
+//		} else {
+//			IJ.log("GPU acceleration disabled");
+//		}
+//	}
 
 
 	private void loadFilters(){
@@ -167,6 +171,7 @@ public class FilterPanel extends JFrame implements Runnable, ASCommon {
 				//filterManager.get
 				if (annotations.isEmpty()) {
 					System.out.println("tab-"+filter);
+					System.out.println("checker_5");
 					pane.addTab(filter,null,
 							createTab(settings,	filterManager.getFilterImage(filter), tabNum, filters.size(),filter)
 							);
@@ -375,13 +380,75 @@ public class FilterPanel extends JFrame implements Runnable, ASCommon {
 				pane.setSelectedIndex(currentIndex + 1);
 			}
 		}
+		
+		if(event==BENCHMARK_BUTTON_PRESSED){
+			
+			// Benchmark only applies to segmentation (FilterManager); MomentsManager has no benchmark
+		    if (!(filterManager instanceof FilterManager)) {
+		        IJ.log("Benchmark is only available for segmentation projects");
+		        return;
+		    }
+
+			// Save GPU setting before starting benchmark (same as Compute)
+		    FilterManager fm = (FilterManager) filterManager;
+
+			 // CH - ask which backend to benchmark on
+			 String[] options = {"Auto", "CPU", "GPU"};
+			 int choice = JOptionPane.showOptionDialog(
+			         this,
+			         "Select backend for benchmarking:",
+			         "Benchmark Backend",
+			         JOptionPane.DEFAULT_OPTION,
+			         JOptionPane.QUESTION_MESSAGE,
+			         null, options, options[0]);
+	
+			 if (choice == JOptionPane.CLOSED_OPTION) {
+			     return;   // user closed the dialog -> cancel benchmark
+			 }
+	
+			 dsp.ConvFactory.BackendMode m =
+			         (choice == 1) ? dsp.ConvFactory.BackendMode.FORCE_CPU
+			       : (choice == 2) ? dsp.ConvFactory.BackendMode.FORCE_GPU
+			       :                 dsp.ConvFactory.BackendMode.AUTO;
+			 fm.setMode(m);
+
+			progressBar.setVisible(true);
+			progressBar.setValue(0);
+
+			computationThread = new Thread(() -> {
+				try {
+					fm.benchmarkFilters(progress -> {
+						SwingUtilities.invokeLater(() -> progressBar.setValue(progress));
+					});
+				} catch (InterruptedException e) {
+					System.out.println("Benchmark was canceled.");
+				} finally {
+					SwingUtilities.invokeLater(() -> {
+						progressBar.setVisible(false);
+						progressBar.setValue(0);
+						if (ProfilingManager.hasData()) {
+							String projectDir = System.getProperty("user.dir");
+							new BenchmarkPanel(projectDir);
+						}
+					});
+				}
+			});
+			computationThread.start();
+		}
 		if(event==COMPUTE_BUTTON_PRESSED){
 
-			// Save GPU setting before starting computation
-			boolean useGPU = gpuToggle.isSelected();
+			// OLD:
+//			boolean useGPU = gpuToggle.isSelected();
+//			FilterManager fm = (FilterManager) filterManager;
+//			fm.setUseGPU(useGPU);
+			
+			
+			// instead of choosing, system autodetects presence of GPU and runs accordingly
 			FilterManager fm = (FilterManager) filterManager;
-			fm.setUseGPU(useGPU);
+			fm.setMode(dsp.ConvFactory.BackendMode.AUTO);   // Compute always auto-detects
 
+
+			
 			// Progress bar setup
 			progressBar.setVisible(true);
 			progressBar.setValue(0);
