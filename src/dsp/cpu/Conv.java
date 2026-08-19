@@ -1,6 +1,6 @@
 package dsp.cpu;
 
-import dsp.IConv;
+import dsp.*;
 import ij.IJ;
 import ij.ImageStack;
 import ij.process.FloatProcessor;
@@ -10,7 +10,7 @@ import ijaux.scale.IJLineIteratorStack;
 
 import java.awt.Rectangle;
 
-
+// ch- rename to conv_engine_cpu
 /**
  * @version 	1.2 23 Aug 2016
  *              1.1	14 Oct 2013
@@ -45,11 +45,62 @@ import java.awt.Rectangle;
  *      License along with this library; if not, write to the Free Software
  *      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
-
-public class Conv implements IConv {
+@ConvImplementation(backend = BackendType.CPU)
+public class Conv implements IConv,IConv2 {
 	
 	public static boolean debug=false;
 	
+  
+ 
+	//Replacement for the 10 convolveFloat1D, with included TaskGraph implementation for decreased transference time
+	@Override
+	public void convolveSep3(FloatProcessor src, float[] kernx, float[] kern_diff1, float[] kern_diff2,
+			FloatProcessor gradx, FloatProcessor grady,
+			FloatProcessor lap_xx, FloatProcessor lap_yy, FloatProcessor lap_xy) {
+
+		long tCpu = System.nanoTime();
+
+		convolveFloat1D(gradx,  kern_diff1, Ox);
+		convolveFloat1D(gradx,  kernx,      Oy);
+
+		convolveFloat1D(grady,  kern_diff1, Oy);
+		convolveFloat1D(grady,  kernx,      Ox);
+
+		convolveFloat1D(lap_xx, kern_diff2, Ox);
+		convolveFloat1D(lap_xx, kernx,      Oy);
+
+		convolveFloat1D(lap_yy, kern_diff2, Oy);
+		convolveFloat1D(lap_yy, kernx,      Ox);
+
+		convolveFloat1D(lap_xy, kern_diff1, Oy);
+		convolveFloat1D(lap_xy, kern_diff1, Ox);
+		System.out.println("sep3 CPU conv = " + (System.nanoTime()-tCpu)/1e6 + "ms");
+	}
+	
+	@Override
+	public void convolveStructGrad(FloatProcessor src, float[] kernx, float[] kern_diff1,
+	                               FloatProcessor gradx, FloatProcessor grady) {
+	    long t = System.nanoTime();
+	    int n = src.getWidth() * src.getHeight();
+	    System.arraycopy(src.getPixels(), 0, gradx.getPixels(), 0, n);
+	    System.arraycopy(src.getPixels(), 0, grady.getPixels(), 0, n);
+	    convolveFloat1D(gradx, kern_diff1, Ox); convolveFloat1D(gradx, kernx, Oy);
+	    convolveFloat1D(grady, kern_diff1, Oy); convolveFloat1D(grady, kernx, Ox);
+	    System.out.println("stgrad CPU = " + (System.nanoTime()-t)/1e6 + "ms");
+	}
+
+	@Override
+	public void convolveStructSmooth(float[] kernx, float[] kern_diff1,
+	                                 FloatProcessor gx2, FloatProcessor gy2, FloatProcessor gxy) {
+	    long t = System.nanoTime();
+	    convolveFloat1D(gx2, kern_diff1, Ox); convolveFloat1D(gx2, kernx, Oy);
+	    convolveFloat1D(gy2, kern_diff1, Oy); convolveFloat1D(gy2, kernx, Ox);
+	    convolveFloat1D(gxy, kern_diff1, Oy); convolveFloat1D(gxy, kernx, Ox);
+	    System.out.println("stsmooth CPU = " + (System.nanoTime()-t)/1e6 + "ms");
+	}
+	
+	
+ 
 	/**
 	 * It is used for semi-separable convolution
 	 * @param ip
