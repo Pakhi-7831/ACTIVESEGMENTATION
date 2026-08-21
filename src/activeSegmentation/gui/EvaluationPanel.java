@@ -20,6 +20,10 @@ public class EvaluationPanel extends JFrame  implements Runnable {
 	private ProjectManager projectManager=null;
 	private IEvaluation evaluation=null;
 
+	
+	/**
+	 * Show panel.
+	 */
 	public void showPanel() {
 		setTitle("Evaluation");
 		setIconImage(Toolkit.getDefaultToolkit().getImage(EvaluationPanel.class.getResource("logo.png")));
@@ -34,6 +38,12 @@ public class EvaluationPanel extends JFrame  implements Runnable {
 		isRunning=true;
 	}
 
+	/**
+	 * Instantiates a new evaluation panel.
+	 *
+	 * @param dataManager the data manager
+	 * @param evaluation the evaluation
+	 */
 	public EvaluationPanel(ProjectManager dataManager, IEvaluation evaluation) {
 		
 		this.projectManager = dataManager;
